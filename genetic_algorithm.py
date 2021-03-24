@@ -1,101 +1,174 @@
 import ludopy
 import numpy as np
+from copy import deepcopy
 
 class GeneticAlgorithm:
-    def __init__(self):
-        self.g = ludopy.Game()
-        self.there_is_a_winner = False
-        # Bounds the weights for each variable
-        self.bounds =  [-100, 100]
-        # Number of vars for the objective function
-        self.vars = 5
-        # define the total iterations
-        self.n_iter = 100
-        # bits per variable
-        self.n_bits = 16
-        # define the population size
-        self.n_pop = 100
-        # crossover rate
-        self.r_cross = 0.9
-        # mutation rate
-        self.r_mut = 1.0 / (float(self.n_bits) * self.vars)
+	def __init__(self):
+		# Bounds the weights for each variable
+		self.bounds =  [-100, 100]
+		# Number of vars for the objective function
+		self.vars = 3
+		# define the total iterations
+		self.n_iter = 100
+		# bits per variable
+		self.n_bits = 16
+		# define the population size
+		self.n_pop = 20
+		# crossover rate
+		self.r_cross = 0.9
+		# mutation rate
+		self.r_mut = 1.0 / (float(self.n_bits) * self.vars)
+		self.init_pop()
 
-    def play(self):
-        # initial population of random bitstring
-	    self.pop = [np.random.randint(0, 2, self.n_bits*self.vars).tolist() for _ in range(self.n_pop)]
-        # keep track of best solution
-	    self.best, self.best_eval = 0, self.objective(self.pop[0])
-        while not self.there_is_a_winner:
-            (dice, move_pieces, player_pieces, enemy_pieces, player_is_a_winner, there_is_a_winner), player_i = self.g.get_observation()
-            print(player_i, dice)
-            if len(move_pieces):
-                piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
-            else:
-                piece_to_move = -1
-            _, _, _, _, _, self.there_is_a_winner = self.g.answer_observation(piece_to_move)
-    
-    # ref code: https://machinelearningmastery.com/simple-genetic-algorithm-from-scratch-in-python/
-    # ref paper: http://airccse.org/journal/ijaia/papers/3112ijaia11.pdf
-    def objective(self, x):
-        '''
-        inputs:
-            x is "weights"
-            s is states
-        outputs:
-            fitness value
-        '''
-        return x
+	def init_pop(self):
+		# initial population of random bitstring
+		self.pop = [np.random.randint(0, 2, self.n_bits*self.vars).tolist() for _ in range(self.n_pop)]
 
-    def decode(self, bitstring):
-        decoded = list()
-        largest = 2**self.n_bits
-        for i in range(self.vars):
-            # extract the substring
-            start, end = i * n_bits, (i * n_bits)+n_bits
-            substring = bitstring[start:end]
-            # convert bitstring to a string of chars
-            chars = ''.join([str(s) for s in substring])
-            # convert bitstring to integer
-            integer = int(chars, 2)
-            # scale integer to desired range
-            value = bounds[0] + (integer/largest) * (bounds[1] - bounds[0])
-            # store
-            decoded.append(value)
-        return decoded
+	def evolve(self):
+		self.best = 0
+		self.best_weights = self.decode(self.pop[0])
+		# enumarate generations
+		for gen in range(self.n_iter):
+			# decode population
+			decoded = [self.decode(p) for p in self.pop]
+			# evaluate all candidates in the population
+			scores = [self.objective(d) for d in decoded]
+			# check for new best solution
+			for i in range(self.n_pop):
+				if scores[i] > self.best:
+					self.best, self.best_weights = scores[i], self.decode(self.pop[i])
+					print('Gen: {}, new best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
+			# select parents
+			selected = [self.selection(self.pop, scores) for _ in range(self.n_pop)]
+			# create next generation
+			children = list()
+			for i in range(0, self.n_pop, 2):
+				# get selected parents in pairs
+				p1, p2 = selected[i], selected[i+1]
+				# crossover and mutation
+				for c in self.crossover(p1, p2):
+					# mutation
+					self.mutation(c)
+					# store for next generation
+					children.append(c)
+			# replace population
+			self.pop = children
+		return (self.best, self.best_weights)
+	
+	# ref code: https://machinelearningmastery.com/simple-genetic-algorithm-from-scratch-in-python/
+	# ref paper: http://airccse.org/journal/ijaia/papers/3112ijaia11.pdf
+	def util_func(self, w, game, dice, move_pieces, player_pieces, enemy_pieces):
+		n_enemies_home_prior = 12 - np.count_nonzero(enemy_pieces)
+		n_pieces_home_prior = 4 - np.count_nonzero(player_pieces)
+		pieces_at_goal_offset = [p - 59 for p in player_pieces]
+		n_pieces_goal_prior = 4 - np.count_nonzero(pieces_at_goal_offset)
+		# remember which piece to move
+		piece_to_move = move_pieces[0]
+		score = 0
 
-    # tournament selection
-    def selection(self, pop, scores, k=3):
-        # first random selection
-        selection_ix = np.random.randint(len(pop))
-        for ix in np.random.randint(0, len(pop), k-1):
-            # check if better (e.g. perform a tournament)
-            if scores[ix] < scores[selection_ix]:
-                selection_ix = ix
-        return pop[selection_ix]
+		for piece in move_pieces:
+			# create deepcopy of game instance in order to do a move and see what happens
+			g = deepcopy(game)
+			_, _, _, _, _, there_is_a_winner = g.answer_observation(piece)
+			# check what happened
+			(dice, move_pieces, player_pieces, enemy_pieces, player_is_a_winner, there_is_a_winner), player_i = g.get_observation()
+			# calculate score
+			n_enemies_home_posterio = 12 - np.count_nonzero(enemy_pieces)
+			n_pieces_home_posterio = 4 - np.count_nonzero(player_pieces)
+			pieces_at_goal_offset = [p - 59 for p in player_pieces]
+			n_pieces_goal_poesterio = 4 - np.count_nonzero(pieces_at_goal_offset)
+			if n_enemies_home_prior < n_enemies_home_posterio and score < w[0]:
+				# enemy piece hit home, score = weight[0]
+				score = w[0]
+				piece_to_move = piece
+			if n_pieces_home_posterio < n_pieces_home_prior and score < w[1]:
+				# own piece moved out from start, score = weight[1]
+				score = w[1]
+				piece_to_move = piece
+			if n_pieces_goal_poesterio > n_pieces_goal_prior and score < w[2]:
+				# piece moved to goal, score = weight[2]
+				score = w[2]
+				piece_to_move = piece
 
-    # crossover two parents to create two children
-    def crossover(self, p1, p2):
-        # children are copies of parents by default
-        c1, c2 = p1.copy(), p2.copy()
-        # check for recombination
-        if np.random.rand() < self.r_cross:
-            # select crossover point that is not on the end of the string
-            pt = np.random.randint(1, len(p1)-2)
-            # perform crossover
-            c1 = p1[:pt] + p2[pt:]
-            c2 = p2[:pt] + p1[pt:]
-        return [c1, c2]
+		return piece_to_move
 
-    # mutation operator
-    def mutation(bitstring):
-        for i in range(len(bitstring)):
-            # check for a mutation
-            if np.random.rand() < self.r_mut:
-                # flip the bit
-                bitstring[i] = 1 - bitstring[i]
+
+	def objective(self, x):
+		# play game 100 times, using the given weights
+		# times won = fitness value
+		times_won = 0
+		for i in range(50):
+			game = ludopy.Game()
+			player_is_a_winner = False
+			there_is_a_winner = False
+			while not there_is_a_winner:
+				(dice, move_pieces, player_pieces, enemy_pieces, player_is_a_winner, there_is_a_winner), player_i = game.get_observation()
+				# only do moves for player 0, all other players will move randomly
+				piece_to_move = -1
+				if player_i == 0:
+					if len(move_pieces):
+						piece_to_move = self.util_func(x, deepcopy(game), dice, move_pieces, player_pieces, enemy_pieces)
+				else:
+					if len(move_pieces):
+						piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
+				_, _, _, _, _, there_is_a_winner = game.answer_observation(piece_to_move)
+			# game done, if first winnner was player 0, increment times_won
+			if game.first_winner_was == 0:
+				times_won += 1
+		return times_won
+
+	def decode(self, bitstring):
+		decoded = list()
+		largest = 2**self.n_bits
+		for i in range(self.vars):
+			# extract the substring
+			start, end = i * self.n_bits, (i * self.n_bits)+self.n_bits
+			substring = bitstring[start:end]
+			# convert bitstring to a string of chars
+			chars = ''.join([str(s) for s in substring])
+			# convert bitstring to integer
+			integer = int(chars, 2)
+			# scale integer to desired range
+			value = self.bounds[0] + (integer/largest) * (self.bounds[1] - self.bounds[0])
+			# store
+			decoded.append(value)
+		return decoded
+
+	# tournament selection
+	def selection(self, pop, scores, k=3):
+		# first random selection
+		selection_ix = np.random.randint(len(pop))
+		for ix in np.random.randint(0, len(pop), k-1):
+			# check if better (e.g. perform a tournament)
+			if scores[ix] > scores[selection_ix]:
+				selection_ix = ix
+		return pop[selection_ix]
+
+	# crossover two parents to create two children
+	def crossover(self, p1, p2):
+		# children are copies of parents by default
+		c1, c2 = p1.copy(), p2.copy()
+		# check for recombination
+		if np.random.rand() < self.r_cross:
+			# select crossover point that is not on the end of the string
+			pt = np.random.randint(1, len(p1)-2)
+			# perform crossover
+			c1 = p1[:pt] + p2[pt:]
+			c2 = p2[:pt] + p1[pt:]
+		return [c1, c2]
+
+	# mutation operator
+	def mutation(self, bitstring):
+		for i in range(len(bitstring)):
+			# check for a mutation
+			if np.random.rand() < self.r_mut:
+				# flip the bit
+				bitstring[i] = 1 - bitstring[i]
 
 
 if __name__ == "__main__":
-    ga = GeneticAlgorithm()
-    ga.play()
-    
+	ga = GeneticAlgorithm()
+	best, best_weights = ga.evolve()
+	print('Done!')
+	print('Best score: {}/100 wins')
+	print('Weights: {}'.format(best_weights))
