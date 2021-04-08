@@ -1,17 +1,19 @@
 import ludopy
 import numpy as np
 from copy import deepcopy
+import logging
+from timeit import default_timer as timer
 
 class GeneticAlgorithm:
 	def __init__(self):
 		# Bounds the weights for each variable
 		self.bounds =  [-100, 100]
 		# Number of vars for the objective function
-		self.vars = 3
+		self.vars = 9
 		# define the total iterations
 		self.n_iter = 100
 		# bits per variable
-		self.n_bits = 16
+		self.n_bits = 8
 		# define the population size
 		self.n_pop = 20
 		# crossover rate
@@ -38,6 +40,7 @@ class GeneticAlgorithm:
 				if scores[i] > self.best:
 					self.best, self.best_weights = scores[i], self.decode(self.pop[i])
 					print('Gen: {}, new best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
+					logging.info('Gen: {}, new best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
 			# select parents
 			selected = [self.selection(self.pop, scores) for _ in range(self.n_pop)]
 			# create next generation
@@ -54,7 +57,45 @@ class GeneticAlgorithm:
 			# replace population
 			self.pop = children
 		return (self.best, self.best_weights)
+
+	def get_safe_pieces(self, player_pieces, enemy_pieces):
+		safe_spots = []
+		safe_pieces = 0
+		for i in range(len(player_pieces)-1):
+			for j in range(i+1,len(player_pieces)):
+				if player_pieces[i] == player_pieces[j] and player_pieces[i] not in safe_spots:
+					safe_spots.append(player_pieces[i])
+		
+		for piece in player_pieces:
+			for spot in safe_spots:
+				# if piece is on safe spot which is not home
+				if piece == spot and spot != 0:
+					safe_pieces += 1
+		return safe_spots, safe_pieces
 	
+	def get_danger_pieces(self, player_pieces, enemy_pieces, safe):
+		danger_pieces = 0
+		danger_spots = []
+		safe_spots = [0, 1, 9, 14, 22, 27, 35, 40, 48, 54, 55, 56, 57, 58, 59]
+		invalid_enemy = [0, 54, 55, 56, 57, 58, 59]
+		# add detected safe spots from get_safe_pieces() to list
+		for spot in safe:
+			if spot not in safe_spots:
+				safe_spots.append(spot)
+		for piece in player_pieces:
+			for enemies in enemy_pieces:
+				for enemy in enemies:
+					if piece - enemy <= 6 and piece - enemy > 0 or piece - enemy >= -50 and piece - enemy <= -46:
+						if piece not in safe_spots and enemy not in invalid_enemy and piece not in danger_spots:
+							danger_spots.append(piece)
+		return len(danger_spots)
+
+	def check_star_hit(self, prior_pieces, player_pieces):
+		for i in range(len(prior_pieces)):
+			if player_pieces[i] - prior_pieces[i] > 6:
+				return True
+		return False
+
 	# ref code: https://machinelearningmastery.com/simple-genetic-algorithm-from-scratch-in-python/
 	# ref paper: http://airccse.org/journal/ijaia/papers/3112ijaia11.pdf
 	def util_func(self, w, game, dice, move_pieces, player_pieces, enemy_pieces):
@@ -62,11 +103,15 @@ class GeneticAlgorithm:
 		n_pieces_home_prior = 4 - np.count_nonzero(player_pieces)
 		pieces_at_goal_offset = [p - 59 for p in player_pieces]
 		n_pieces_goal_prior = 4 - np.count_nonzero(pieces_at_goal_offset)
+		safe_spots, n_pieces_safe_prior = self.get_safe_pieces(player_pieces, enemy_pieces)
+		n_pieces_danger_spot_prior = self.get_danger_pieces(player_pieces, enemy_pieces, safe_spots)
+		prior_pieces = player_pieces
 		# remember which piece to move
 		piece_to_move = move_pieces[0]
-		score = 0
+		max_score = 0
 
 		for piece in move_pieces:
+			score = 0
 			# create deepcopy of game instance in order to do a move and see what happens
 			g = deepcopy(game)
 			_, _, _, _, _, there_is_a_winner = g.answer_observation(piece)
@@ -77,18 +122,40 @@ class GeneticAlgorithm:
 			n_pieces_home_posterio = 4 - np.count_nonzero(player_pieces)
 			pieces_at_goal_offset = [p - 59 for p in player_pieces]
 			n_pieces_goal_poesterio = 4 - np.count_nonzero(pieces_at_goal_offset)
-			if n_enemies_home_prior < n_enemies_home_posterio and score < w[0]:
-				# enemy piece hit home, score = weight[0]
-				score = w[0]
+			safe_spots, n_pieces_safe_posterio = self.get_safe_pieces(player_pieces, enemy_pieces)
+			n_pieces_danger_spot_posterio = self.get_danger_pieces(player_pieces, enemy_pieces, safe_spots)
+			hit_star = self.check_star_hit(prior_pieces, player_pieces)
+			if n_enemies_home_prior < n_enemies_home_posterio:
+				# enemy piece hit home, score += weight[0]
+				score += w[0]
+			if n_pieces_home_posterio < n_pieces_home_prior:
+				# own piece moved out from start, score += weight[1]
+				score += w[1]
+			if n_pieces_home_posterio > n_pieces_home_prior:
+				# own piece hit home..., score += weight[2]
+				score += w[2]
+			if n_pieces_goal_poesterio > n_pieces_goal_prior:
+				# piece moved to goal, score += weight[3]
+				score += w[3]
+			if n_pieces_safe_prior < n_pieces_safe_posterio:
+				# piece moved to safe spot, score += weight[4]
+				score += w[4]
+			if n_pieces_safe_prior > n_pieces_safe_posterio:
+				# piece moved out of safe spot, score += weight[5]
+				score += w[5]
+			if n_pieces_danger_spot_prior > n_pieces_danger_spot_posterio:
+				# piece moved out of danger, score += weight[6]
+				score += w[6]
+			if n_pieces_danger_spot_prior < n_pieces_danger_spot_posterio:
+				# piece moved into dangerous spot, score += weight[7]
+				score += w[7]
+			if hit_star:
+				# piece landed on star, score += weight[8]
+				score += w[8]
+
+			if score > max_score:
 				piece_to_move = piece
-			if n_pieces_home_posterio < n_pieces_home_prior and score < w[1]:
-				# own piece moved out from start, score = weight[1]
-				score = w[1]
-				piece_to_move = piece
-			if n_pieces_goal_poesterio > n_pieces_goal_prior and score < w[2]:
-				# piece moved to goal, score = weight[2]
-				score = w[2]
-				piece_to_move = piece
+				score = max_score
 
 		return piece_to_move
 
@@ -97,6 +164,7 @@ class GeneticAlgorithm:
 		# play game 100 times, using the given weights
 		# times won = fitness value
 		times_won = 0
+		start = timer()
 		for i in range(50):
 			game = ludopy.Game()
 			player_is_a_winner = False
@@ -115,6 +183,8 @@ class GeneticAlgorithm:
 			# game done, if first winnner was player 0, increment times_won
 			if game.first_winner_was == 0:
 				times_won += 1
+		end = timer()
+		logging.info('Done playing 50 games for a single member in the population. Games won: {}, time taken: {}'.format(times_won, end-start))
 		return times_won
 
 	def decode(self, bitstring):
@@ -167,6 +237,7 @@ class GeneticAlgorithm:
 
 
 if __name__ == "__main__":
+	logging.basicConfig(filename='run.log', format='%(asctime)s %(message)s', level=logging.INFO)
 	ga = GeneticAlgorithm()
 	best, best_weights = ga.evolve()
 	print('Done!')
