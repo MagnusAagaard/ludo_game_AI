@@ -40,7 +40,7 @@ class GeneticAlgorithm:
 				if scores[i] > self.best:
 					self.best, self.best_weights = scores[i], self.decode(self.pop[i])
 					print('Gen: {}, new best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
-					logging.info('Gen: {}, new best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
+				logging.info('Gen: {}, best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
 			# select parents
 			selected = [self.selection(self.pop, scores) for _ in range(self.n_pop)]
 			# create next generation
@@ -165,7 +165,7 @@ class GeneticAlgorithm:
 		# times won = fitness value
 		times_won = 0
 		start = timer()
-		for i in range(50):
+		for i in range(100):
 			game = ludopy.Game()
 			player_is_a_winner = False
 			there_is_a_winner = False
@@ -184,7 +184,7 @@ class GeneticAlgorithm:
 			if game.first_winner_was == 0:
 				times_won += 1
 		end = timer()
-		logging.info('Done playing 50 games for a single member in the population. Games won: {}, time taken: {}'.format(times_won, end-start))
+		logging.info('Done playing 100 games for a single member in the population. Games won: {}, time taken: {}'.format(times_won, end-start))
 		return times_won
 
 	def decode(self, bitstring):
