@@ -240,6 +240,7 @@ if __name__ == "__main__":
 	logging.basicConfig(filename='run.log', format='%(asctime)s %(message)s', level=logging.INFO)
 	ga = GeneticAlgorithm()
 	best, best_weights = ga.evolve()
+	logging.info('Done! Best score: {}/100 wins! Weights: {}'.format(best, best_weights))
 	print('Done!')
-	print('Best score: {}/100 wins')
+	print('Best score: {}/100 wins'.format(best))
 	print('Weights: {}'.format(best_weights))
