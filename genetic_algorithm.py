@@ -40,7 +40,7 @@ class GeneticAlgorithm:
 				if scores[i] > self.best:
 					self.best, self.best_weights = scores[i], self.decode(self.pop[i])
 					print('Gen: {}, new best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
-				logging.info('Gen: {}, best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
+			logging.info('Gen: {}, best: {}/100 wins, weights: {}'.format(gen, self.best, self.best_weights))
 			# select parents
 			selected = [self.selection(self.pop, scores) for _ in range(self.n_pop)]
 			# create next generation
