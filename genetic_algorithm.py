@@ -59,7 +59,7 @@ class GeneticAlgorithm:
 		return (self.best, self.best_weights)
 
 	def get_safe_pieces(self, player_pieces, enemy_pieces):
-		safe_spots = []
+		safe_spots = [0, 1, 9, 14, 22, 27, 35, 48, 53, 54, 55, 56, 57, 58, 59]
 		safe_pieces = 0
 		for i in range(len(player_pieces)-1):
 			for j in range(i+1,len(player_pieces)):
@@ -73,17 +73,28 @@ class GeneticAlgorithm:
 					safe_pieces += 1
 		return safe_spots, safe_pieces
 	
-	def get_danger_pieces(self, player_pieces, enemy_pieces, safe):
+	def get_danger_pieces(self, player_pieces, enemy_pieces, safe_spots):
 		danger_pieces = 0
 		danger_spots = []
-		safe_spots = [0, 1, 9, 14, 22, 27, 35, 40, 48, 54, 55, 56, 57, 58, 59]
-		invalid_enemy = [0, 54, 55, 56, 57, 58, 59]
-		# add detected safe spots from get_safe_pieces() to list
-		for spot in safe:
-			if spot not in safe_spots:
-				safe_spots.append(spot)
+		invalid_enemy = [0, 53, 54, 55, 56, 57, 58, 59]
+		# correct enemy positions to be as seen from player 1...
+		i = 0
+		enemy_pieces_corrected = []
+		for enemies in enemy_pieces:
+			i += 1
+			tmp = []
+			for enemy in enemies:
+				if enemy not in invalid_enemy:
+					val = (enemy + i*13) % 52
+					if val == 0:
+						val = 52
+					tmp.append(val)
+				else:
+					tmp.append(enemy)
+			enemy_pieces_corrected.append(tmp)
+
 		for piece in player_pieces:
-			for enemies in enemy_pieces:
+			for enemies in enemy_pieces_corrected:
 				for enemy in enemies:
 					if piece - enemy <= 6 and piece - enemy > 0 or piece - enemy >= -50 and piece - enemy <= -46:
 						if piece not in safe_spots and enemy not in invalid_enemy and piece not in danger_spots:
