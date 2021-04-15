@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 class GeneticAlgorithm:
 	def __init__(self):
 		# Bounds the weights for each variable
-		self.bounds =  [-100, 100]
+		self.bounds =  [-128, 128]
 		# Number of vars for the objective function
 		self.vars = 9
 		# define the total iterations
@@ -15,7 +15,7 @@ class GeneticAlgorithm:
 		# bits per variable
 		self.n_bits = 8
 		# define the population size
-		self.n_pop = 20
+		self.n_pop = 50
 		# crossover rate
 		self.r_cross = 0.9
 		# mutation rate
@@ -127,7 +127,7 @@ class GeneticAlgorithm:
 			g = deepcopy(game)
 			_, _, _, _, _, there_is_a_winner = g.answer_observation(piece)
 			# check what happened for player 0
-        	player_pieces, enemy_pieces = g.get_pieces(0)
+			player_pieces, enemy_pieces = g.get_pieces(0)
 			# calculate score
 			n_enemies_home_posterio = 12 - np.count_nonzero(enemy_pieces)
 			n_pieces_home_posterio = 4 - np.count_nonzero(player_pieces)
