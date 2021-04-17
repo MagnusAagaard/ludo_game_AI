@@ -203,7 +203,7 @@ class GeneticAlgorithm:
 				#print("Hit star: {}".format(hit_star))
 			if n_pieces_in_attack_spot_prior < n_pieces_in_attack_spot_posterio:
 				# piece moved to attack spot
-				print("ATTACK")
+				#print("ATTACK")
 				score += w[9]
 
 			if score > max_score:
