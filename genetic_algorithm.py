@@ -9,7 +9,7 @@ class GeneticAlgorithm:
 		# Bounds the weights for each variable
 		self.bounds =  [-128, 128]
 		# Number of vars for the objective function
-		self.vars = 9
+		self.vars = 10
 		# define the total iterations
 		self.n_iter = 100
 		# bits per variable
@@ -101,6 +101,32 @@ class GeneticAlgorithm:
 							danger_spots.append(piece)
 		return len(danger_spots)
 
+	def get_attack_spots(self, player_pieces, enemy_pieces):
+		attack_spots = []
+		invalid_enemy = [0, 53, 54, 55, 56, 57, 58, 59]
+		# correct enemy positions to be as seen from player 1...
+		i = 0
+		enemy_pieces_corrected = []
+		for enemies in enemy_pieces:
+			i += 1
+			tmp = []
+			for enemy in enemies:
+				if enemy not in invalid_enemy:
+					val = (enemy + i*13) % 52
+					if val == 0:
+						val = 52
+					tmp.append(val)
+				else:
+					tmp.append(enemy)
+			enemy_pieces_corrected.append(tmp)
+
+		for piece in player_pieces:
+			for enemies in enemy_pieces_corrected:
+				for enemy in enemies:
+					if enemy - piece <= 6 and enemy - piece > 0:
+						attack_spots.append(piece)
+		return attack_spots
+
 	def check_star_hit(self, prior_pieces, player_pieces):
 		for i in range(len(prior_pieces)):
 			if player_pieces[i] - prior_pieces[i] > 6:
@@ -116,6 +142,7 @@ class GeneticAlgorithm:
 		n_pieces_goal_prior = 4 - np.count_nonzero(pieces_at_goal_offset)
 		safe_spots, n_pieces_safe_prior = self.get_safe_pieces(player_pieces_in, enemy_pieces_in)
 		n_pieces_danger_spot_prior = self.get_danger_pieces(player_pieces_in, enemy_pieces_in, safe_spots)
+		n_pieces_in_attack_spot_prior = self.get_attack_spots(player_pieces_in, enemy_pieces_in)
 		prior_pieces = player_pieces_in
 		# remember which piece to move
 		piece_to_move = move_pieces_in[0]
@@ -135,6 +162,7 @@ class GeneticAlgorithm:
 			n_pieces_goal_posterio = 4 - np.count_nonzero(pieces_at_goal_offset)
 			safe_spots, n_pieces_safe_posterio = self.get_safe_pieces(player_pieces, enemy_pieces)
 			n_pieces_danger_spot_posterio = self.get_danger_pieces(player_pieces, enemy_pieces, safe_spots)
+			n_pieces_in_attack_spot_posterio = self.get_attack_spots(player_pieces, enemy_pieces)
 			hit_star = self.check_star_hit(prior_pieces, player_pieces)
 
 			if n_enemies_home_prior < n_enemies_home_posterio:
@@ -173,6 +201,10 @@ class GeneticAlgorithm:
 				# piece landed on star, score += weight[8]
 				score += w[8]
 				#print("Hit star: {}".format(hit_star))
+			if n_pieces_in_attack_spot_prior < n_pieces_in_attack_spot_posterio:
+				# piece moved to attack spot
+				print("ATTACK")
+				score += w[9]
 
 			if score > max_score:
 				piece_to_move = piece
