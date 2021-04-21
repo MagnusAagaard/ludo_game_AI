@@ -2,6 +2,7 @@ import ludopy
 import numpy as np
 from copy import deepcopy
 from timeit import default_timer as timer
+import logging
 
 def get_safe_pieces(player_pieces, enemy_pieces):
     safe_spots = [0, 1, 9, 14, 22, 27, 35, 48, 53, 54, 55, 56, 57, 58, 59]
@@ -46,6 +47,32 @@ def get_danger_pieces(player_pieces, enemy_pieces, safe_spots):
                         danger_spots.append(piece)
     return len(danger_spots)
 
+def get_attack_spots(player_pieces, enemy_pieces):
+    attack_spots = []
+    invalid_enemy = [0, 53, 54, 55, 56, 57, 58, 59]
+    # correct enemy positions to be as seen from player 1...
+    i = 0
+    enemy_pieces_corrected = []
+    for enemies in enemy_pieces:
+        i += 1
+        tmp = []
+        for enemy in enemies:
+            if enemy not in invalid_enemy:
+                val = (enemy + i*13) % 52
+                if val == 0:
+                    val = 52
+                tmp.append(val)
+            else:
+                tmp.append(enemy)
+        enemy_pieces_corrected.append(tmp)
+
+    for piece in player_pieces:
+        for enemies in enemy_pieces_corrected:
+            for enemy in enemies:
+                if enemy - piece <= 6 and enemy - piece > 0:
+                    attack_spots.append(piece)
+    return attack_spots
+
 def check_star_hit(prior_pieces, player_pieces):
     for i in range(len(prior_pieces)):
         if player_pieces[i] - prior_pieces[i] > 6:
@@ -59,6 +86,7 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
     n_pieces_goal_prior = 4 - np.count_nonzero(pieces_at_goal_offset)
     safe_spots, n_pieces_safe_prior = get_safe_pieces(player_pieces_in, enemy_pieces_in)
     n_pieces_danger_spot_prior = get_danger_pieces(player_pieces_in, enemy_pieces_in, safe_spots)
+    n_pieces_in_attack_spot_prior = get_attack_spots(player_pieces_in, enemy_pieces_in)
     prior_pieces = player_pieces_in
     # remember which piece to move
     piece_to_move = move_pieces_in[0]
@@ -78,6 +106,7 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
         n_pieces_goal_posterio = 4 - np.count_nonzero(pieces_at_goal_offset)
         safe_spots, n_pieces_safe_posterio = get_safe_pieces(player_pieces, enemy_pieces)
         n_pieces_danger_spot_posterio = get_danger_pieces(player_pieces, enemy_pieces, safe_spots)
+        n_pieces_in_attack_spot_posterio = get_attack_spots(player_pieces, enemy_pieces)
         hit_star = check_star_hit(prior_pieces, player_pieces)
         
         if n_enemies_home_prior < n_enemies_home_posterio:
@@ -116,6 +145,10 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
             # piece landed on star, score += weight[8]
             score += w[8]
             #print("Hit star: {}".format(hit_star))
+        if n_pieces_in_attack_spot_prior < n_pieces_in_attack_spot_posterio:
+            # piece moved to attack spot
+            #print("ATTACK")
+            score += w[9]
 
         if score > max_score:
             piece_to_move = piece
@@ -123,12 +156,16 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
 
     return piece_to_move
 
-def evaluate(x):
+def evaluate(x, n_games):
     # play game 100 times, using the given weights
     # times won = fitness value
     times_won = 0
+    print('Starting eval of {} games...'.format(n_games))
+    print('Weights: {}'.format(x))
+    logging.info('Starting eval of {} games...'.format(n_games))
+    logging.info('Weights: {}'.format(x))
     start = timer()
-    for i in range(100):
+    for i in range(n_games):
         game = ludopy.Game()
         player_is_a_winner = False
         there_is_a_winner = False
@@ -146,13 +183,21 @@ def evaluate(x):
         # game done, if first winnner was player 0, increment times_won
         if game.first_winner_was == 0:
             times_won += 1
+        if i % 100 == 0:
+            logging.info('Done playing {} games. Won so far: {}'.format(i, times_won))
     end = timer()
-    print('Done playing 100 games. Games won: {}, time taken: {}'.format(times_won, end-start))
+    print('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, times_won, end-start))
+    logging.info('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, times_won, end-start))
     return times_won
 
 def main():
-    weights = [10, 20, -50, 15, 5, -5, 2, -2, 8]
-    evaluate(weights)
+    logging.basicConfig(filename='eval.log', format='%(asctime)s %(message)s', level=logging.INFO)
+    # With attack
+    weights = [104.0, 127.0, -123.0, 100.0, 69.0, -78.0, 55.0, -20.0, 98.0, 45.0]
+    # Without attack
+    #weights = [104.0, 127.0, -123.0, 100.0, 69.0, -78.0, 55.0, -20.0, 98.0, 0]
+    n_games = 10000
+    _ = evaluate(weights, n_games)
 
 if __name__ == "__main__":
     main()
