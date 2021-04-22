@@ -90,7 +90,7 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
     prior_pieces = player_pieces_in
     # remember which piece to move
     piece_to_move = move_pieces_in[0]
-    max_score = 0
+    max_score = np.min(w)
 
     for piece in move_pieces_in:
         score = 0
@@ -196,6 +196,8 @@ def main():
     weights = [104.0, 127.0, -123.0, 100.0, 69.0, -78.0, 55.0, -20.0, 98.0, 45.0]
     # Without attack
     #weights = [104.0, 127.0, -123.0, 100.0, 69.0, -78.0, 55.0, -20.0, 98.0, 0]
+    # 5 base wegihts: hit oppenent home, out from start, move to goal, go to safety, go to star
+    #weights = [104.0, 127.0, 0, 100.0, 69.0, 0, 0, 0, 98.0, 0]
     n_games = 10000
     _ = evaluate(weights, n_games)
 

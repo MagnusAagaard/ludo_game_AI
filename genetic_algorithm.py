@@ -146,7 +146,7 @@ class GeneticAlgorithm:
 		prior_pieces = player_pieces_in
 		# remember which piece to move
 		piece_to_move = move_pieces_in[0]
-		max_score = 0
+		max_score = np.min(w)
 
 		for piece in move_pieces_in:
 			score = 0
