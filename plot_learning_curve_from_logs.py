@@ -69,7 +69,7 @@ def plot_values(minimums, maximums, averages, name):
     plt.savefig('./figures/' + name[:-4])
 
 def main():
-    name = 'run3_79wr_attack.log'
+    name = 'run1_wr85_attack.log'
     log_file = './logs/' + name
     lines = []
     with open(log_file, 'r') as f:

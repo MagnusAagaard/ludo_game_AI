@@ -9,7 +9,7 @@ class GeneticAlgorithm:
 		# Bounds the weights for each variable
 		self.bounds =  [-128, 128]
 		# Number of vars for the objective function
-		self.vars = 10
+		self.vars = 7
 		# define the total iterations
 		self.n_iter = 100
 		# bits per variable
@@ -189,22 +189,22 @@ class GeneticAlgorithm:
 				# piece moved out of safe spot, score += weight[5]
 				score += w[5]
 				#print("piece out of safe spot: {},{}".format(n_pieces_safe_prior, n_pieces_safe_posterio))
-			if n_pieces_danger_spot_prior > n_pieces_danger_spot_posterio:
+			#if n_pieces_danger_spot_prior > n_pieces_danger_spot_posterio:
 				# piece moved out of danger, score += weight[6]
-				score += w[6]
+			#	score += w[6]
 				#print("piece out of danger spot: {},{}".format(n_pieces_danger_spot_prior, n_pieces_danger_spot_posterio))
-			if n_pieces_danger_spot_prior < n_pieces_danger_spot_posterio:
+			#if n_pieces_danger_spot_prior < n_pieces_danger_spot_posterio:
 				# piece moved into dangerous spot, score += weight[7]
-				score += w[7]
+			#	score += w[7]
 				#print("piece into danger spot: {},{}".format(n_pieces_danger_spot_prior, n_pieces_danger_spot_posterio))
 			if hit_star:
 				# piece landed on star, score += weight[8]
-				score += w[8]
+				score += w[6]
 				#print("Hit star: {}".format(hit_star))
-			if n_pieces_in_attack_spot_prior < n_pieces_in_attack_spot_posterio:
+			#if n_pieces_in_attack_spot_prior < n_pieces_in_attack_spot_posterio:
 				# piece moved to attack spot
 				#print("ATTACK")
-				score += w[9]
+			#	score += w[9]
 
 			if score > max_score:
 				piece_to_move = piece
