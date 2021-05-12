@@ -46,4 +46,22 @@ player_pieces_posterio = [1,2,10,0]
 #print(get_safe_pieces(player_pieces, enemy_pieces))
 safe_spots, pieces = get_safe_pieces(player_pieces, enemy_pieces)
 print(get_danger_pieces(player_pieces, enemy_pieces, safe_spots))
-print(check_hit_star(player_pieces, player_pieces_posterio))
+print(check_star_hit(player_pieces, player_pieces_posterio))
+enemies_at_goal_offset = [[p[0] - 59, p[1] - 59, p[2] - 59, p[3] - 59] for p in enemy_pieces]
+n_enemy_pieces_at_goal_prior = [4 - np.count_nonzero(enemies) for enemies in enemies_at_goal_offset]
+enemy_pieces_now = [[0,0,0,32],[0,59,0,59],[59,59,48,59]]
+pieces_diff = 0
+i = -1
+for idx, p in enumerate(enemy_pieces):
+    piece_diff = [p[0] - enemy_pieces_now[idx][0], p[1] - enemy_pieces_now[idx][1], p[2] - enemy_pieces_now[idx][2], p[3] - enemy_pieces_now[idx][3]]
+    diff = np.count_nonzero(piece_diff)
+    if diff != 0:
+        i = idx
+        pieces_diff += diff
+    
+if pieces_diff == 1:
+    print("WOrks")
+    print(i)
+else:
+    print("Error")
+    print(i)
