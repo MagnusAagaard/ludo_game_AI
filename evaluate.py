@@ -3,6 +3,8 @@ import numpy as np
 from copy import deepcopy
 from timeit import default_timer as timer
 import logging
+import os
+from multiprocessing import Pool
 
 def get_safe_pieces(player_pieces, enemy_pieces):
     safe_spots = [0, 1, 9, 14, 22, 27, 35, 48, 53, 54, 55, 56, 57, 58, 59]
@@ -89,6 +91,7 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
     n_pieces_in_attack_spot_prior = get_attack_spots(player_pieces_in, enemy_pieces_in)
     prior_pieces = player_pieces_in
     # remember which piece to move
+    #piece_to_move = move_pieces_in[np.random.randint(0, len(move_pieces_in))]
     piece_to_move = move_pieces_in[0]
     max_score = np.min(w)
 
@@ -183,23 +186,60 @@ def evaluate(x, n_games):
         # game done, if first winnner was player 0, increment times_won
         if game.first_winner_was == 0:
             times_won += 1
-        if i % 100 == 0:
+        if i % 10000 == 0:
             logging.info('Done playing {} games. Won so far: {}'.format(i, times_won))
     end = timer()
     print('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, times_won, end-start))
     logging.info('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, times_won, end-start))
     return times_won
 
+def evaluate_multiprocessing(x):
+    times_won = 0
+    game = ludopy.Game()
+    player_is_a_winner = False
+    there_is_a_winner = False
+    while not there_is_a_winner:
+        (dice, move_pieces, player_pieces, enemy_pieces, player_is_a_winner, there_is_a_winner), player_i = game.get_observation()
+        # only do moves for player 0, all other players will move randomly
+        piece_to_move = -1
+        if player_i == 0:
+            if len(move_pieces):
+                piece_to_move = util_func(x, deepcopy(game), dice, move_pieces, player_pieces, enemy_pieces)
+        else:
+            if len(move_pieces):
+                piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
+        _, _, _, _, _, there_is_a_winner = game.answer_observation(piece_to_move)
+    # game done, if first winnner was player 0, increment times_won
+    if game.first_winner_was == 0:
+        return 1
+    else:
+        return 0
+
 def main():
     logging.basicConfig(filename='eval.log', format='%(asctime)s %(message)s', level=logging.INFO)
-    # With attack
-    weights = [104.0, 127.0, -123.0, 100.0, 69.0, -78.0, 55.0, -20.0, 98.0, 45.0]
-    # Without attack
-    #weights = [104.0, 127.0, -123.0, 100.0, 69.0, -78.0, 55.0, -20.0, 98.0, 0]
-    # 5 base wegihts: hit oppenent home, out from start, move to goal, go to safety, go to star
-    #weights = [104.0, 127.0, 0, 100.0, 69.0, 0, 0, 0, 98.0, 0]
-    n_games = 10000
-    _ = evaluate(weights, n_games)
+    # With attack positive: WR = 67.181%
+    #weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 5.0]
+    # Without attack: WR = 66.973%
+    weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 0]
+    # Basic weights: WR = 63.669%
+    #weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 0, 0, 69.0, 0]
+    # Baseline: Random moves: WR = 25.891%
+    # Baseline: Move first piece only: WR = 25.585%
+    #weights = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    n_games = 100000
+    #_ = evaluate(weights, n_games)
+    total_wins = 0
+    print('Starting eval of {} games...'.format(n_games))
+    print('Weights: {}'.format(weights))
+    logging.info('Starting eval of {} games...'.format(n_games))
+    logging.info('Weights: {}'.format(weights))
+    start = timer()
+    with Pool(os.cpu_count()-1) as pool:
+        dataout = pool.map(evaluate_multiprocessing, [weights for i in range(n_games)])
+    wins = np.count_nonzero(np.asarray(dataout))
+    end = timer()
+    logging.info('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, wins, end-start))
+    
 
 if __name__ == "__main__":
     main()
