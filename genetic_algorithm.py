@@ -247,7 +247,7 @@ class GeneticAlgorithm:
 		# times won = fitness value
 		times_won = 0
 		start = timer()
-		for i in range(100):
+		for i in range(1000):
 			game = ludopy.Game()
 			player_is_a_winner = False
 			there_is_a_winner = False

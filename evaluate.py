@@ -86,6 +86,8 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
     n_pieces_home_prior = 4 - np.count_nonzero(player_pieces_in)
     pieces_at_goal_offset = [p - 59 for p in player_pieces_in]
     n_pieces_goal_prior = 4 - np.count_nonzero(pieces_at_goal_offset)
+    enemies_at_goal_offset = [[p[0] - 59, p[1] - 59, p[2] - 59, p[3] - 59] for p in enemy_pieces_in]
+    n_enemy_pieces_at_goal = [4 - np.count_nonzero(enemies) for enemies in enemies_at_goal_offset]
     safe_spots, n_pieces_safe_prior = get_safe_pieces(player_pieces_in, enemy_pieces_in)
     n_pieces_danger_spot_prior = get_danger_pieces(player_pieces_in, enemy_pieces_in, safe_spots)
     n_pieces_in_attack_spot_prior = get_attack_spots(player_pieces_in, enemy_pieces_in)
@@ -114,7 +116,22 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
         
         if n_enemies_home_prior < n_enemies_home_posterio:
             # enemy piece hit home, score += weight[0]
-            score += w[0]
+            # Find out which player it was, and how many pieces that player has in goal position
+            n_hit_home = n_enemies_home_posterio - n_enemies_home_prior
+            pieces_diff = 0
+            i = -1
+            for idx, p in enumerate(enemy_pieces_in):
+                piece_diff = [p[0] - enemy_pieces[idx][0], p[1] - enemy_pieces[idx][1], p[2] - enemy_pieces[idx][2], p[3] - enemy_pieces[idx][3]]
+                diff = np.count_nonzero(piece_diff)
+                if diff != 0:
+                    i = idx
+                    pieces_diff += diff
+            if pieces_diff > 0 and pieces_diff < 3 and i != -1:
+                score += w[0]*n_hit_home*(1+n_enemy_pieces_at_goal[i])
+            else:
+                logging.info("ERROR, more than two enemy pieces hit home? : {}".format(pieces_diff))
+                logging.info("Prior pieces: {}, posterio pieces: {}".format(enemy_pieces_in, enemy_pieces))
+                score += w[0]*n_hit_home
             #print("enemy hit home: {},{}".format(n_enemies_home_prior, n_enemies_home_posterio))
         if n_pieces_home_posterio < n_pieces_home_prior:
             # own piece moved out from start, score += weight[1]
@@ -218,9 +235,10 @@ def evaluate_multiprocessing(x):
 def main():
     logging.basicConfig(filename='eval.log', format='%(asctime)s %(message)s', level=logging.INFO)
     # With attack positive: WR = 67.181%
-    #weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 5.0]
+    # With attack and scaled enemy hit home: WR = 68.765%
+    weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 5.0]
     # Without attack: WR = 66.973%
-    weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 0]
+    #weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 0]
     # Basic weights: WR = 63.669%
     #weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 0, 0, 69.0, 0]
     # Baseline: Random moves: WR = 25.891%
