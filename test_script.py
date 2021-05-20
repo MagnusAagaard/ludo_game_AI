@@ -65,3 +65,5 @@ if pieces_diff == 1:
 else:
     print("Error")
     print(i)
+
+print(np.random.randint(0, 50, 2))

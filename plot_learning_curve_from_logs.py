@@ -66,7 +66,7 @@ def plot_values(minimums, maximums, averages, name):
     avg_line.set_label('Average')
     plt.legend(loc='lower right')
     # save plot
-    plt.savefig('./figures/' + name[:-4])
+    plt.savefig('./figures/' + name[:-4] + '.eps')
 
 def main():
     name = 'run1_wr85_attack.log'
