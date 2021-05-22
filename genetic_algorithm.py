@@ -193,6 +193,7 @@ class GeneticAlgorithm:
 						pieces_diff += diff
 				if pieces_diff > 0 and pieces_diff < 3 and i != -1:
 					score += w[0]*n_hit_home*(1+n_enemy_pieces_at_goal[i])
+					#score += w[0]*n_hit_home*(max(1,1 + n_enemy_pieces_at_goal[i] - n_pieces_goal_posterio))
 				else:
 					logging.info("ERROR, more than two enemy pieces hit home? : {}".format(pieces_diff))
 					logging.info("Prior pieces: {}, posterio pieces: {}".format(enemy_pieces_in, enemy_pieces))

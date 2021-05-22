@@ -6,6 +6,83 @@ import logging
 import os
 from multiprocessing import Pool
 
+class QLearningPlayer():
+    def __init__(self, filepath):
+        self.Q = self.loadQTable(filepath)
+        self.numOfPieces = 4
+        self.numOfStates = 6 * self.numOfPieces
+        self.numOfActions = 4
+
+    def loadQTable(self,filepath):
+        print("Loading Q Table.")
+        return np.load(filepath)
+
+    def getQValue(self, state, diceIdx, action):
+        idx = state+[diceIdx]+[action]
+        return self.Q[idx[0],idx[1],idx[2],idx[3],idx[4],idx[5],idx[6],idx[7],idx[8],idx[9],idx[10],idx[11],idx[12],idx[13],idx[14],idx[15],idx[16],idx[17],idx[18],idx[19],idx[20],idx[21],idx[22],idx[23],idx[24],idx[25]]
+
+    def getState(self, playerPieces, enemyPieces):
+        def distanceBetweenTwoPieces(piece, enemy, i):
+            if enemy == 0 or enemy >= 53 or piece == 0 or piece >= 53:
+                return 1000
+            enemy_relative_to_piece = (enemy + 13 * i) % 52
+            if enemy_relative_to_piece == 0: enemy_relative_to_piece = 52
+            distances = [enemy_relative_to_piece - piece, (enemy_relative_to_piece - 52) - piece]
+            return distances[np.argmin(list(map(abs,distances)))]
+
+        HOME = 0
+        SAFE = 1
+        VULNERABLE = 2
+        ATTACKING = 3
+        FINISHLINE = 4
+        FINISHED = 5
+
+        home = [0]
+        globes = [1, 9, 14, 22, 27, 35, 40, 48]
+        unsafe_globes = [14, 27, 40]
+
+        state = []
+        for playerPiece in playerPieces:
+            pieceState = [0] * (int)(self.numOfStates / self.numOfPieces)
+
+            #Calculating the relative distance of all the enemy pieces to the players piece
+            distanceToEnemy = []
+            for i, enemy in enumerate(enemyPieces):
+                for enemyPiece in enemy:
+                    distanceToEnemy.append(distanceBetweenTwoPieces(playerPiece, enemyPiece, i + 1))
+
+            if playerPiece in home:
+                pieceState[HOME] = 1
+
+            if playerPiece in globes:
+                pieceState[SAFE] = 1
+
+            vulnerable = any([-6 <= relativePosition < 0 for relativePosition in distanceToEnemy])
+            if (vulnerable and playerPiece not in globes) or playerPiece in unsafe_globes: pieceState[VULNERABLE] = 1
+
+            attacking = any([0 < relativePosition <= 6 for relativePosition in distanceToEnemy])
+            if attacking: pieceState[ATTACKING] = 1
+
+            if playerPiece >= 53:
+                pieceState[FINISHLINE] = 1
+
+            if playerPiece == 59:
+                pieceState[FINISHED] = 1
+
+            state += pieceState
+        return state
+
+    def getNextAction(self, state, dice, movePieces):
+        diceIdx = dice - 1
+        bestAction = movePieces[0]
+        bestQValue = self.getQValue(state, diceIdx, bestAction)
+        for action in movePieces:
+            if self.getQValue(state,diceIdx, action) > bestQValue:
+                bestAction = action
+                bestQValue = self.getQValue(state,diceIdx,action)
+
+        return bestAction
+
 def get_safe_pieces(player_pieces, enemy_pieces):
     safe_spots = [0, 1, 9, 14, 22, 27, 35, 48, 53, 54, 55, 56, 57, 58, 59]
     safe_pieces = 0
@@ -128,6 +205,7 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
                     pieces_diff += diff
             if pieces_diff > 0 and pieces_diff < 3 and i != -1:
                 score += w[0]*n_hit_home*(1+n_enemy_pieces_at_goal[i])
+                #score += w[0]*n_hit_home*(max(1,1 + n_enemy_pieces_at_goal[i] - n_pieces_goal_posterio))
             else:
                 logging.info("ERROR, more than two enemy pieces hit home? : {}".format(pieces_diff))
                 logging.info("Prior pieces: {}, posterio pieces: {}".format(enemy_pieces_in, enemy_pieces))
@@ -227,13 +305,29 @@ def evaluate_multiprocessing(x):
                 piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
         _, _, _, _, _, there_is_a_winner = game.answer_observation(piece_to_move)
     # game done, if first winnner was player 0, increment times_won
-    if game.first_winner_was == 0:
-        return 1
-    else:
-        return 0
+    return game.first_winner_was
+
+def evaluate_qlearning_multiprocessing(x):
+    times_won = 0
+    game = ludopy.Game()
+    player_is_a_winner = False
+    there_is_a_winner = False
+    while not there_is_a_winner:
+        (dice, move_pieces, player_pieces, enemy_pieces, player_is_a_winner, there_is_a_winner), player_i = game.get_observation()
+        # only do moves for player 0, all other players will move randomly
+        piece_to_move = -1
+        if player_i == 0:
+            if len(move_pieces):
+                piece_to_move = util_func(x, deepcopy(game), dice, move_pieces, player_pieces, enemy_pieces)
+        else:
+            if len(move_pieces):
+                piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
+        _, _, _, _, _, there_is_a_winner = game.answer_observation(piece_to_move)
+    # game done, if first winnner was player 0, increment times_won
+    return game.first_winner_was
 
 def main():
-    logging.basicConfig(filename='eval.log', format='%(asctime)s %(message)s', level=logging.INFO)
+    logging.basicConfig(filename='eval_winrates.log', format='%(message)s', level=logging.INFO)
     # With attack positive: WR = 67.181%
     # With attack and scaled enemy hit home: WR = 68.765%
     weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 5.0]
@@ -254,9 +348,13 @@ def main():
     start = timer()
     with Pool(os.cpu_count()-1) as pool:
         dataout = pool.map(evaluate_multiprocessing, [weights for i in range(n_games)])
-    wins = np.count_nonzero(np.asarray(dataout))
+    winrates = [[dataout[:i].count(0)/i*100, dataout[:i].count(1)/i*100, dataout[:i].count(2)/i*100, dataout[:i].count(3)/i*100] for i in range(1,len(dataout)+1)]
     end = timer()
-    logging.info('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, wins, end-start))
+    logging.info('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, dataout.count(0), end-start))
+    #print(dataout)
+    for line in winrates:
+        logging.info(line)
+    print('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, dataout.count(0), end-start))
     
 
 if __name__ == "__main__":

@@ -1,4 +1,6 @@
 import numpy as np
+from timeit import default_timer as timer
+import logging
 
 def get_safe_pieces(player_pieces, enemy_pieces):
     safe_spots = []
@@ -67,3 +69,11 @@ else:
     print(i)
 
 print(np.random.randint(0, 50, 2))
+#start = timer()
+#dataout = [i%4 for i in range(100000)]
+#winrates = [[dataout[:i].count(0)/i*100, dataout[:i].count(1)/i*100, dataout[:i].count(2)/i*100, dataout[:i].count(3)/i*100] for i in range(1,len(dataout)+1)]
+#end = timer()
+#logging.basicConfig(filename='eval_winrates.log', format='%(message)s', level=logging.INFO)
+#for line in winrates:
+#    logging.info(line)
+#print(end-start)
