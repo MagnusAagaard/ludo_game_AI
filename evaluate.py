@@ -83,6 +83,8 @@ class QLearningPlayer():
 
         return bestAction
 
+player = QLearningPlayer('BestQTable.npy')
+
 def get_safe_pieces(player_pieces, enemy_pieces):
     safe_spots = [0, 1, 9, 14, 22, 27, 35, 48, 53, 54, 55, 56, 57, 58, 59]
     safe_pieces = 0
@@ -204,11 +206,13 @@ def util_func(w, game, dice_in, move_pieces_in, player_pieces_in, enemy_pieces_i
                     i = idx
                     pieces_diff += diff
             if pieces_diff > 0 and pieces_diff < 3 and i != -1:
+                #score += w[0]
                 score += w[0]*n_hit_home*(1+n_enemy_pieces_at_goal[i])
                 #score += w[0]*n_hit_home*(max(1,1 + n_enemy_pieces_at_goal[i] - n_pieces_goal_posterio))
             else:
                 logging.info("ERROR, more than two enemy pieces hit home? : {}".format(pieces_diff))
                 logging.info("Prior pieces: {}, posterio pieces: {}".format(enemy_pieces_in, enemy_pieces))
+                #score += w[0]
                 score += w[0]*n_hit_home
             #print("enemy hit home: {},{}".format(n_enemies_home_prior, n_enemies_home_posterio))
         if n_pieces_home_posterio < n_pieces_home_prior:
@@ -300,6 +304,7 @@ def evaluate_multiprocessing(x):
         if player_i == 0:
             if len(move_pieces):
                 piece_to_move = util_func(x, deepcopy(game), dice, move_pieces, player_pieces, enemy_pieces)
+                #piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
         else:
             if len(move_pieces):
                 piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
@@ -307,7 +312,7 @@ def evaluate_multiprocessing(x):
     # game done, if first winnner was player 0, increment times_won
     return game.first_winner_was
 
-def evaluate_qlearning_multiprocessing(x):
+def evaluate_qlearning_multiprocessing(i):
     times_won = 0
     game = ludopy.Game()
     player_is_a_winner = False
@@ -318,13 +323,36 @@ def evaluate_qlearning_multiprocessing(x):
         piece_to_move = -1
         if player_i == 0:
             if len(move_pieces):
-                piece_to_move = util_func(x, deepcopy(game), dice, move_pieces, player_pieces, enemy_pieces)
+                piece_to_move = player.getNextAction(player.getState(player_pieces, enemy_pieces), dice, move_pieces)
         else:
             if len(move_pieces):
                 piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
         _, _, _, _, _, there_is_a_winner = game.answer_observation(piece_to_move)
     # game done, if first winnner was player 0, increment times_won
     return game.first_winner_was
+
+def evaluate_qlearning_vs_ga_multiprocessing(i):
+    weights = [104.0, 118.0, -80.0, 57.0, 94.0, -19.0, 98.0, -58.0, 69.0, 5.0]
+    game = ludopy.Game()
+    player_is_a_winner = False
+    there_is_a_winner = False
+    while not there_is_a_winner:
+        (dice, move_pieces, player_pieces, enemy_pieces, player_is_a_winner, there_is_a_winner), player_i = game.get_observation()
+        # only do moves for player 0, all other players will move randomly
+        piece_to_move = -1
+        if player_i == 0:
+            if len(move_pieces):
+                piece_to_move = util_func(weights, deepcopy(game), dice, move_pieces, player_pieces, enemy_pieces)
+        elif player_i == 2:
+            if len(move_pieces):
+                piece_to_move = player.getNextAction(player.getState(player_pieces, enemy_pieces), dice, move_pieces)
+        else:
+            if len(move_pieces):
+                piece_to_move = move_pieces[np.random.randint(0, len(move_pieces))]
+        _, _, _, _, _, there_is_a_winner = game.answer_observation(piece_to_move)
+    # game done, if first winnner was player 0, increment times_won
+    return game.first_winner_was
+
 
 def main():
     logging.basicConfig(filename='eval_winrates.log', format='%(message)s', level=logging.INFO)
@@ -338,20 +366,24 @@ def main():
     # Baseline: Random moves: WR = 25.891%
     # Baseline: Move first piece only: WR = 25.585%
     #weights = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    n_games = 100000
+    n_games = 500000
     #_ = evaluate(weights, n_games)
-    total_wins = 0
+
     print('Starting eval of {} games...'.format(n_games))
     print('Weights: {}'.format(weights))
     logging.info('Starting eval of {} games...'.format(n_games))
     logging.info('Weights: {}'.format(weights))
     start = timer()
+    # Q-learning:
+    #with Pool(os.cpu_count()-1) as pool:
+    #    dataout = pool.map(evaluate_qlearning_vs_ga_multiprocessing, [i for i in range(n_games)])
+    # GA:
     with Pool(os.cpu_count()-1) as pool:
         dataout = pool.map(evaluate_multiprocessing, [weights for i in range(n_games)])
     winrates = [[dataout[:i].count(0)/i*100, dataout[:i].count(1)/i*100, dataout[:i].count(2)/i*100, dataout[:i].count(3)/i*100] for i in range(1,len(dataout)+1)]
     end = timer()
+    #print(end-start)
     logging.info('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, dataout.count(0), end-start))
-    #print(dataout)
     for line in winrates:
         logging.info(line)
     print('Done playing {} games. Games won: {}, time taken: {}'.format(n_games, dataout.count(0), end-start))
